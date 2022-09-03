@@ -1,0 +1,95 @@
+version: '3.3'
+
+services:
+  traefik:
+    image: "traefik:v2.6"
+    container_name: "traefik"
+    command:
+      # - "--log.level=DEBUG"
+      - --api
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443 # new
+      - --certificatesresolvers.myresolver.acme.tlschallenge=true # new
+      - --certificatesresolvers.myresolver.acme.email=${CERTIFICATE_EMAIL} # new
+      - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json # new
+    labels:
+      # Dashboard
+      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_SUBDOMAIN}.${DOMAIN}`)"
+      - "traefik.http.routers.traefik.entrypoints=web"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+      - "traefik.http.routers.traefik.middlewares=authtraefik"
+      - "traefik.http.middlewares.authtraefik.basicauth.users=user:$$apr1$$q8eZFHjF$$Fvmkk//V6Btlaf2i/ju5n/" # user/password
+
+      # global redirect to https
+      - "traefik.http.routers.http-catchall.entrypoints=web"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+
+      # middleware redirect
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - "./letsencrypt:/letsencrypt" # new
+      - traefik-ssl-certs:/ssl-certs
+
+  app1:
+    build: ${APP1_PATH}
+    container_name: app1
+    command: 
+      - bash 
+      - -c 
+      - |
+        python manage.py migrate
+        python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    labels:
+      - "traefik.enable=true"
+      - --port=8000
+      - "traefik.http.routers.app1.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.services.app1.loadbalancer.server.port=8000"
+      - "traefik.http.routers.app1.entrypoints=web,websecure"
+      - "traefik.http.routers.app1.tls.certresolver=myresolver"
+  app2:
+    build: .
+    container_name: app2
+    command: 
+      - bash 
+      - -c 
+      - |
+        python manage.py migrate
+        python manage.py runserver 0.0.0.0:8001
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8001"
+    labels:
+      - "traefik.enable=true"
+      - --port=8001
+      - "traefik.http.routers.app2.rule=Host(`${APP2_SUBDOMAIN}.${DOMAIN}`)"
+      - "traefik.http.services.app2.loadbalancer.server.port=8001"
+      - "traefik.http.routers.app2.entrypoints=web,websecure"
+      - "traefik.http.routers.app2.tls.certresolver=myresolver"
+  
+  whoami:
+    image: traefik/whoami:v1.7.1
+    labels:
+      - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
+      - "traefik.http.routers.whoami.middlewares=auth"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.tls=true"
+      - "traefik.http.routers.whoami.tls.certresolver=myresolver"
+      - "traefik.http.middlewares.auth.basicauth.users=user:$$apr1$$q8eZFHjF$$Fvmkk//V6Btlaf2i/ju5n/" # user/password
+
+volumes:
+  traefik-ssl-certs:
+    driver: local
