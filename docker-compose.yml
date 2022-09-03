@@ -60,7 +60,7 @@ services:
       - "traefik.http.routers.app1.entrypoints=web,websecure"
       - "traefik.http.routers.app1.tls.certresolver=myresolver"
   app2:
-    build: .
+    build: ${APP2_PATH}
     container_name: app2
     command: 
       - bash 
