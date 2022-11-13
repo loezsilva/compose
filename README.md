@@ -1,10 +1,10 @@
 # Criar arquivos na VPS
 
-    mkdir -p data/configurations<br/>
-    touch docker-compose.yml<br/>
-    touch data/traefik.yml<br/>
-    touch data/acme.json<br/>
-    touch data/configurations/dynamic.yml<br/>
+    mkdir -p data/configurations
+    touch docker-compose.yml
+    touch data/traefik.yml
+    touch data/acme.json
+    touch data/configurations/dynamic.yml
     chmod 600 data/acme.json
 
 
